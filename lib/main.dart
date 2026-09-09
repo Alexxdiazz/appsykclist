@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ciclista_page.dart';
+import 'home_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
           secondary: Color(0xFF4A90D9),
         ),
       ),
-      home: const CiclistaPage(),
+      home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }

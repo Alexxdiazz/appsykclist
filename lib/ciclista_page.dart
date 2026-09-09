@@ -12,6 +12,8 @@ class AppColors {
   static const Color accent = Color(0xFFF5A623) ;     // 10%
   static const Color background = Color(0xFFEAF0FB);
   static const Color error = Color(0xFFE74C3C);
+  static const Color textOnDark = Colors.white;        // texto sobre fondos oscuros (primary)
+  static const Color textOnLight = Color(0xFF1A1B47);  // texto sobre fondos claros (background)
 }
 
 
@@ -167,7 +169,7 @@ class _CiclistaPageState extends State<CiclistaPage> {
           children: [
             Icon(Icons.pedal_bike, color: AppColors.accent),
             const SizedBox(width: 8),
-            const Text('Ciclista App', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Syklist', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         backgroundColor: AppColors.primary,
