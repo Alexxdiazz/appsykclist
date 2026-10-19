@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'api_service.dart';
 import 'home_page.dart';
+import 'login_page.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 1. INICIALIZAR SUPABASE AQUÍ
+  await Supabase.initialize(
+    url: 'https://edmpkuvrmxtedwezdzj.supabase.co',
+    anonKey: 'sb_publishable_XZPLkx2zJ8d1_hyWZo_HUA_Uy-BJJ1o',
+  );
+
+  // 2. Ahora sí, recuperar la sesión
+  await ApiService.instance.cargarSesion(); 
+  
   runApp(const MyApp());
 }
 
@@ -20,8 +34,12 @@ class MyApp extends StatelessWidget {
           secondary: Color(0xFF4A90D9),
         ),
       ),
-      home: const HomePage(),
       debugShowCheckedModeBanner: false,
+      home: ApiService.instance.haySesion ? const HomePage() : const LoginPage(),
+      routes: {
+        '/login': (_) => const LoginPage(),
+        '/home': (_) => const HomePage(),
+      },
     );
   }
 }
