@@ -11,8 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 
 /// URL de tu proyecto en Vercel, SIN barra al final.
-/// Ejemplo: 'https://syklist-api.vercel.app'
-const String apiBaseUrl = '';
+/// (Tu proyecto de Vercel se llama sykk.)
+const String apiBaseUrl = 'https://sykk.vercel.app';
 
 class ApiException implements Exception {
   final String mensaje;
