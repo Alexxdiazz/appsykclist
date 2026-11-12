@@ -1,7 +1,3 @@
-// lib/api_service.dart
-// Todo lo que Flutter le pide a la API de Vercel pasa por acá.
-// Flutter NO habla directo con Supabase: habla con Vercel, y Vercel con Supabase.
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -9,12 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
-
-/// Dirección de la API publicada en Vercel (sin barra al final).
 const String apiBaseUrl = 'https://syklist-api.vercel.app';
 
-/// Todas las direcciones completas (con https://) de la API, en un solo lugar.
-/// Cada método de ApiService usa una de estas.
+
 class Endpoints {
   static const String login = '$apiBaseUrl/api/auth/login'; //       https://syklist-api.vercel.app/api/auth/login
   static const String register = '$apiBaseUrl/api/auth/register'; // https://syklist-api.vercel.app/api/auth/register
@@ -29,6 +22,9 @@ class Endpoints {
   /// https://syklist-api.vercel.app/api/recorridos/<id>
   static String recorrido(String id) => '$apiBaseUrl/api/recorridos/$id';
 }
+
+const String apiBaseUrl = 'https://sykk.vercel.app';
+>>>>>>> 2a1905e2d762ad2eeabb43b192098385d25e5b28
 
 class ApiException implements Exception {
   final String mensaje;
@@ -214,6 +210,9 @@ class ApiService {
       'PATCH',
       Endpoints.recorrido(recorridoId),
       cuerpo: {'distancia_m': distanciaM, 'duracion_s': duracionS},
+
+      '/api/recorridos/$recorridoId',
+      cuerpo: {'distancia_m': distanciaM, 'duracion_s': duracionS},
     );
   }
 
@@ -222,6 +221,22 @@ class ApiService {
   // --------------------------------------------------------------------------
   /// Registra una posible caída en la base de datos (tabla alertas_caida).
   /// [recorridoId] es opcional: se manda si la caída ocurrió durante un recorrido.
+  Future<void> registrarAlerta({
+    required double lat,
+    required double lng,
+    String? recorridoId,
+  }) async {
+    await _enviar(
+      'POST',
+      '/api/alertas',
+      cuerpo: {
+        'lat': lat,
+        'lng': lng,
+        if (recorridoId != null) 'recorrido_id': recorridoId,
+      },
+    );
+  }
+
   Future<void> registrarAlerta({
     required double lat,
     required double lng,
