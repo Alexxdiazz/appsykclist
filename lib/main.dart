@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'home_page.dart';
 import 'login_page.dart';
+import 'view/wearable/wearable_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await ApiService.instance.cargarSesion(); // recupera la sesión guardada, si hay
+  await ApiService.instance.cargarSesion(); 
   runApp(const MyApp());
 }
 
@@ -26,11 +27,11 @@ class MyApp extends StatelessWidget {
         ),
       ),
       debugShowCheckedModeBanner: false,
-      // Con sesión guardada arranca en la Home; si no, en el login.
       home: ApiService.instance.haySesion ? const HomePage() : const LoginPage(),
       routes: {
         '/login': (_) => const LoginPage(),
         '/home': (_) => const HomePage(),
+        '/wearable': (_) => const WearablePage(),
       },
     );
   }

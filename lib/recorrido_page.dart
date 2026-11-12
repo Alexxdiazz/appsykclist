@@ -1,8 +1,3 @@
-// lib/recorrido_page.dart
-// Pantalla de recorrido en vivo (RF02, RF03, RF04, RF05, RF06):
-//   1. "Comenzar"  → crea el recorrido en la base de datos (vía API) y empieza a leer el GPS
-//   2. Mientras anda → dibuja la ruta en el mapa y cuenta tiempo, distancia y velocidad
-//   3. "Finalizar" → guarda los puntos de GPS y cierra el recorrido (vía API)
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,7 +9,6 @@ import 'api_service.dart';
 import 'ciclista_page.dart' show AppColors;
 import 'models.dart';
 
-/// Aviso para el usuario (GPS apagado, permiso denegado...).
 class _Aviso implements Exception {
   final String mensaje;
   const _Aviso(this.mensaje);
@@ -65,9 +59,6 @@ class _RecorridoPageState extends State<RecorridoPage> {
     super.dispose();
   }
 
-  // --------------------------------------------------------------------------
-  // GPS
-  // --------------------------------------------------------------------------
   Future<void> _verificarPermiso() async {
     final servicioActivo = await Geolocator.isLocationServiceEnabled();
     if (!servicioActivo) {
@@ -83,7 +74,6 @@ class _RecorridoPageState extends State<RecorridoPage> {
     }
   }
 
-  /// Muestra dónde estás apenas se abre la pantalla (si el permiso lo permite).
   Future<void> _ubicarme() async {
     try {
       await _verificarPermiso();
@@ -93,7 +83,6 @@ class _RecorridoPageState extends State<RecorridoPage> {
       setState(() => _actual = p);
       _moverMapa(p);
     } catch (_) {
-      // Si falla, el botón "Comenzar" vuelve a pedir el permiso y muestra el motivo.
     }
   }
 

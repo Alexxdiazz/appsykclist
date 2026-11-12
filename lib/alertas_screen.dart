@@ -22,7 +22,6 @@ class _AlertasScreenState extends State<AlertasScreen> {
 
   Future<void> _fetchAlertas() async {
     try {
-      // Consulta con JOIN a perfiles y recorridos tiene como saber si .es
       final response = await supabase
           .from('alertas_caida')
           .select('*, perfiles(nombre, plan), recorridos(titulo)')

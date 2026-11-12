@@ -1,11 +1,14 @@
 // lib/home_page.dart
 // Pantalla de inicio: datos reales traídos de la API (Vercel → Supabase).
+// Monetización: el plan gratis ve anuncios y tiene un acceso para mejorar a Premium.
 import 'package:flutter/material.dart';
 
 import 'api_service.dart';
 import 'ciclista_page.dart' show AppColors, CiclistaPage;
+import 'estadisticas_page.dart';
 import 'historial_page.dart';
 import 'models.dart';
+import 'paywall_page.dart';
 import 'recorrido_card.dart';
 import 'recorrido_page.dart';
 
@@ -94,9 +97,28 @@ class _HomePageState extends State<HomePage> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistorialPage()));
   }
 
+  void _abrirReloj() {
+    Navigator.of(context).pushNamed('/wearable');
+  }
+
+  /// Abre la pantalla de suscripción. Al volver, recarga: el plan pudo cambiar.
+  Future<void> _abrirPaywall() async {
+    final cambio = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const PaywallPage()),
+    );
+    if (cambio == true && mounted) _cargar();
+  }
+
+  Future<void> _abrirEstadisticas() async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EstadisticasPage()));
+    if (mounted) _cargar(); // por si se pasó a Premium desde ahí
+  }
+
   void _alTocarNav(int indice) {
     if (indice == 1) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CiclistaPage()));
+    } else if (indice == 2) {
+      _abrirEstadisticas();
     } else if (indice == 3) {
       _verHistorial();
     } else if (indice != 0) {
@@ -124,7 +146,14 @@ class _HomePageState extends State<HomePage> {
             Text('Ciclista App', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        actions: [_buildMenuUsuario()],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.watch),
+            tooltip: 'Simular reloj',
+            onPressed: _abrirReloj,
+          ),
+          _buildMenuUsuario(),
+        ],
       ),
       body: SafeArea(child: _buildCuerpo()),
       bottomNavigationBar: _buildBottomNav(),
@@ -145,7 +174,7 @@ class _HomePageState extends State<HomePage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          _buildSaludo(perfil.nombre),
+          _buildSaludo(perfil),
           const SizedBox(height: 16),
           _buildResumenSemanal(
             _resumen ?? const ResumenSemanal(distanciaKm: 0, tiempoMin: 0, recorridos: 0),
@@ -159,6 +188,11 @@ class _HomePageState extends State<HomePage> {
             _buildSinRecorridos()
           else
             ..._recientes.map((r) => RecorridoCard(recorrido: r)),
+          // Monetización: solo el plan gratis ve publicidad.
+          if (!perfil.esPremium) ...[
+            const SizedBox(height: 8),
+            _buildAnuncio(),
+          ],
         ],
       ),
     );
@@ -199,9 +233,11 @@ class _HomePageState extends State<HomePage> {
 
     return PopupMenuButton<String>(
       onSelected: (valor) {
+        if (valor == 'premium') _abrirPaywall();
         if (valor == 'salir') _cerrarSesion();
       },
       itemBuilder: (_) => const [
+        PopupMenuItem<String>(value: 'premium', child: Text('Mi plan')),
         PopupMenuItem<String>(value: 'salir', child: Text('Cerrar sesión')),
       ],
       child: Padding(
@@ -218,10 +254,51 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSaludo(String nombre) {
-    return Text(
-      'Hola, $nombre 👋',
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textOnLight),
+  Widget _buildSaludo(Perfil perfil) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Hola, ${perfil.nombre} 👋',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textOnLight),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _buildChipPlan(perfil.esPremium),
+      ],
+    );
+  }
+
+  /// Muestra el plan actual y lleva a la pantalla de suscripción.
+  Widget _buildChipPlan(bool premium) {
+    return InkWell(
+      onTap: _abrirPaywall,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: premium ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: premium ? AppColors.primary : AppColors.accent, width: 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.workspace_premium, size: 16, color: AppColors.accent),
+            const SizedBox(width: 4),
+            Text(
+              premium ? 'PREMIUM' : 'Gratis · Mejorar',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: premium ? AppColors.textOnDark : AppColors.textOnLight,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -319,6 +396,63 @@ class _HomePageState extends State<HomePage> {
         'Todavía no tenés recorridos.\nTocá "Iniciar recorrido" para registrar el primero.',
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textOnLight.withOpacity(0.7)),
+      ),
+    );
+  }
+
+  /// Anuncio de ejemplo para el plan gratis (RF13). En Premium no se muestra.
+  Widget _buildAnuncio() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD5DDF2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'PUBLICIDAD',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                  color: AppColors.textOnLight.withOpacity(0.5),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Anuncio de ejemplo',
+                style: TextStyle(fontSize: 11, color: AppColors.textOnLight.withOpacity(0.5)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Icon(Icons.local_offer_outlined, color: AppColors.primary),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Casco AeroPro: 20% de descuento esta semana',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textOnLight),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _abrirPaywall,
+              style: TextButton.styleFrom(foregroundColor: AppColors.secondary),
+              child: const Text('Quitar anuncios con Premium'),
+            ),
+          ),
+        ],
       ),
     );
   }

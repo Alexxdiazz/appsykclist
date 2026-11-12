@@ -6,12 +6,17 @@ double _aDouble(dynamic valor) {
   return double.tryParse(valor.toString()) ?? 0;
 }
 
+/// El plan gratis muestra como máximo esta cantidad de recorridos (la API lo aplica igual).
+const int limiteHistorialGratis = 5;
+
 class Perfil {
   final String id;
   final String nombre;
   final String plan;
 
   const Perfil({required this.id, required this.nombre, required this.plan});
+
+  bool get esPremium => plan == 'premium';
 
   factory Perfil.fromJson(Map<String, dynamic> json) => Perfil(
         id: json['id'] as String,
@@ -62,6 +67,55 @@ class RecorridoReciente {
   }
 }
 
+/// Kilómetros de una semana (para el gráfico de estadísticas).
+class SemanaKm {
+  final String etiqueta;
+  final double km;
+
+  const SemanaKm({required this.etiqueta, required this.km});
+}
+
+/// Estadísticas avanzadas (solo plan premium).
+class Estadisticas {
+  final double totalKm;
+  final int totalMin;
+  final int recorridos;
+  final double velocidadMedia;
+  final double promedioKm;
+  final String? mejorTitulo;
+  final double mejorKm;
+  final List<SemanaKm> semanas;
+
+  const Estadisticas({
+    required this.totalKm,
+    required this.totalMin,
+    required this.recorridos,
+    required this.velocidadMedia,
+    required this.promedioKm,
+    required this.mejorTitulo,
+    required this.mejorKm,
+    required this.semanas,
+  });
+
+  factory Estadisticas.fromJson(Map<String, dynamic> json) {
+    final mejor = json['mejor'];
+    final listaSemanas = (json['semanas'] as List<dynamic>?) ?? const [];
+    return Estadisticas(
+      totalKm: _aDouble(json['total_km']),
+      totalMin: _aDouble(json['total_min']).round(),
+      recorridos: _aDouble(json['recorridos']).round(),
+      velocidadMedia: _aDouble(json['velocidad_media']),
+      promedioKm: _aDouble(json['promedio_km']),
+      mejorTitulo: mejor is Map ? mejor['titulo'] as String? : null,
+      mejorKm: mejor is Map ? _aDouble(mejor['km']) : 0,
+      semanas: listaSemanas.map((s) {
+        final m = s as Map<String, dynamic>;
+        return SemanaKm(etiqueta: (m['etiqueta'] as String?) ?? '', km: _aDouble(m['km']));
+      }).toList(),
+    );
+  }
+}
+
 /// "Hoy, 07:40" / "Ayer, 08:15" / "Lun, 18:30" / "03/04, 10:05"
 String formatearFecha(DateTime fecha) {
   final f = fecha.toLocal();
@@ -87,4 +141,11 @@ String formatearDuracion(int segundos) {
   final mm = m.toString().padLeft(2, '0');
   final ss = s.toString().padLeft(2, '0');
   return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
+}
+
+/// 188 minutos → "3 h 8 min"   |   45 minutos → "45 min"
+String formatearMinutos(int minutos) {
+  final h = minutos ~/ 60;
+  final m = minutos % 60;
+  return h > 0 ? '$h h $m min' : '$m min';
 }

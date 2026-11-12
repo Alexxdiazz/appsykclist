@@ -86,7 +86,7 @@ class _LoginPageState extends State<LoginPage> {
                   const Icon(Icons.pedal_bike, color: AppColors.accent, size: 56),
                   const SizedBox(height: 8),
                   const Text(
-                    'Ciclista App',
+                    'Syklist',
                     style: TextStyle(color: AppColors.textOnDark, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
