@@ -1,9 +1,13 @@
 // lib/login_page.dart
 // Pantalla de inicio de sesión y registro (RF01).
+// Para crear una cuenta hay que marcar la casilla de aceptación de los Términos de uso
+// y la Política de Privacidad; la API también lo exige y guarda qué versión se aceptó.
 import 'package:flutter/material.dart';
 
 import 'api_service.dart';
 import 'ciclista_page.dart' show AppColors;
+import 'legal_content.dart';
+import 'legal_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -20,6 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _modoRegistro = false;
   bool _enviando = false;
   bool _verPassword = false;
+  bool _aceptaTerminos = false;
   String? _error;
 
   @override
@@ -28,6 +33,12 @@ class _LoginPageState extends State<LoginPage> {
     _passCtrl.dispose();
     _nombreCtrl.dispose();
     super.dispose();
+  }
+
+  void _abrirLegal(String titulo, List<SeccionLegal> secciones) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => LegalPage(titulo: titulo, secciones: secciones)),
+    );
   }
 
   Future<void> _enviar() async {
@@ -47,6 +58,10 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _error = 'Ingresá tu nombre');
       return;
     }
+    if (_modoRegistro && !_aceptaTerminos) {
+      setState(() => _error = 'Para crear la cuenta tenés que aceptar los Términos de uso y la Política de Privacidad.');
+      return;
+    }
 
     setState(() {
       _enviando = true;
@@ -55,7 +70,13 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       if (_modoRegistro) {
-        await ApiService.instance.registrarse(email: email, password: password, nombre: nombre);
+        await ApiService.instance.registrarse(
+          email: email,
+          password: password,
+          nombre: nombre,
+          aceptoTerminos: _aceptaTerminos,
+          versionTerminos: versionTerminos,
+        );
       } else {
         await ApiService.instance.iniciarSesion(email, password);
       }
@@ -72,6 +93,9 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    // En el registro, el botón queda bloqueado hasta aceptar los términos.
+    final puedeEnviar = !_enviando && (!_modoRegistro || _aceptaTerminos);
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: SafeArea(
@@ -86,7 +110,7 @@ class _LoginPageState extends State<LoginPage> {
                   const Icon(Icons.pedal_bike, color: AppColors.accent, size: 56),
                   const SizedBox(height: 8),
                   const Text(
-                    'Syklist',
+                    'Ciclista App',
                     style: TextStyle(color: AppColors.textOnDark, fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
@@ -137,6 +161,10 @@ class _LoginPageState extends State<LoginPage> {
                               onPressed: () => setState(() => _verPassword = !_verPassword),
                             ),
                           ),
+                          if (_modoRegistro) ...[
+                            const SizedBox(height: 8),
+                            _casillaTerminos(),
+                          ],
                           if (_error != null) ...[
                             const SizedBox(height: 12),
                             Text(
@@ -146,10 +174,12 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                           const SizedBox(height: 16),
                           ElevatedButton(
-                            onPressed: _enviando ? null : _enviar,
+                            onPressed: puedeEnviar ? _enviar : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.accent,
                               foregroundColor: AppColors.primary,
+                              disabledBackgroundColor: AppColors.accent.withOpacity(0.35),
+                              disabledForegroundColor: AppColors.primary.withOpacity(0.5),
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               elevation: 0,
@@ -171,6 +201,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ? null
                                 : () => setState(() {
                                       _modoRegistro = !_modoRegistro;
+                                      _aceptaTerminos = false;
                                       _error = null;
                                     }),
                             style: TextButton.styleFrom(foregroundColor: AppColors.secondary),
@@ -188,6 +219,61 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Casilla "Acepto los Términos de uso y la Política de Privacidad", con enlaces a cada texto.
+  Widget _casillaTerminos() {
+    const estilo = TextStyle(fontSize: 14, color: AppColors.textOnLight);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CheckboxListTile(
+          value: _aceptaTerminos,
+          onChanged: _enviando
+              ? null
+              : (valor) => setState(() {
+                    _aceptaTerminos = valor ?? false;
+                    _error = null;
+                  }),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          activeColor: AppColors.primary,
+          title: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('Acepto los ', style: estilo),
+              _enlace('Términos de uso', () => _abrirLegal('Términos de uso', terminosDeUso)),
+              const Text(' y la ', style: estilo),
+              _enlace(
+                'Política de Privacidad',
+                () => _abrirLegal('Política de privacidad', politicaDePrivacidad),
+              ),
+            ],
+          ),
+        ),
+        if (!_aceptaTerminos)
+          Text(
+            'Necesitás aceptarlos para crear la cuenta.',
+            style: TextStyle(fontSize: 12, color: AppColors.textOnLight.withOpacity(0.6)),
+          ),
+      ],
+    );
+  }
+
+  Widget _enlace(String texto, VoidCallback alTocar) {
+    return GestureDetector(
+      onTap: alTocar,
+      child: Text(
+        texto,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF2F6DB5),
+          decoration: TextDecoration.underline,
         ),
       ),
     );

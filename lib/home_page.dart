@@ -1,8 +1,6 @@
-// lib/home_page.dart
-// Pantalla de inicio: datos reales traídos de la API (Vercel → Supabase).
-// Monetización: el plan gratis ve anuncios y tiene un acceso para mejorar a Premium.
 import 'package:flutter/material.dart';
 
+import 'alertas_page.dart';
 import 'api_service.dart';
 import 'ciclista_page.dart' show AppColors, CiclistaPage;
 import 'estadisticas_page.dart';
@@ -91,6 +89,10 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(builder: (_) => const RecorridoPage()),
     );
     if (guardado == true) _cargar(); // actualiza resumen y recientes
+  }
+
+  void _verAlertas() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AlertasPage()));
   }
 
   void _verHistorial() {
@@ -234,10 +236,12 @@ class _HomePageState extends State<HomePage> {
     return PopupMenuButton<String>(
       onSelected: (valor) {
         if (valor == 'premium') _abrirPaywall();
+        if (valor == 'alertas') _verAlertas();
         if (valor == 'salir') _cerrarSesion();
       },
       itemBuilder: (_) => const [
         PopupMenuItem<String>(value: 'premium', child: Text('Mi plan')),
+        PopupMenuItem<String>(value: 'alertas', child: Text('Mis alertas')),
         PopupMenuItem<String>(value: 'salir', child: Text('Cerrar sesión')),
       ],
       child: Padding(

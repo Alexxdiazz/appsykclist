@@ -149,3 +149,44 @@ String formatearMinutos(int minutos) {
   final m = minutos % 60;
   return h > 0 ? '$h h $m min' : '$m min';
 }
+
+/// Una alerta de posible caída guardada en la base (tabla alertas_caida).
+class Alerta {
+  final String id;
+  final String estado; // pendiente | confirmada | falsa_alarma
+  final String fecha;
+  final double? lat;
+  final double? lng;
+
+  const Alerta({
+    required this.id,
+    required this.estado,
+    required this.fecha,
+    required this.lat,
+    required this.lng,
+  });
+
+  String get titulo {
+    switch (estado) {
+      case 'confirmada':
+        return 'Alerta confirmada';
+      case 'falsa_alarma':
+        return 'Falsa alarma';
+      default:
+        return 'Pendiente de respuesta';
+    }
+  }
+
+  factory Alerta.fromJson(Map<String, dynamic> json) {
+    final momento = DateTime.tryParse(json['detectada_en'].toString());
+    final lat = json['lat'];
+    final lng = json['lng'];
+    return Alerta(
+      id: json['id'].toString(),
+      estado: (json['estado'] as String?) ?? 'pendiente',
+      fecha: momento == null ? '' : formatearFecha(momento),
+      lat: lat == null ? null : _aDouble(lat),
+      lng: lng == null ? null : _aDouble(lng),
+    );
+  }
+}

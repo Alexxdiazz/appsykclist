@@ -1,18 +1,23 @@
 import 'dart:async';
-
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 
+import 'alerta_caida_page.dart';
 import 'api_service.dart';
 import 'ciclista_page.dart' show AppColors;
+import 'detector_caidas.dart';
 import 'models.dart';
 
 class _Aviso implements Exception {
   final String mensaje;
   const _Aviso(this.mensaje);
 }
+
+enum _EstadoSensor { buscando, activo, sinSensor }
 
 class RecorridoPage extends StatefulWidget {
   const RecorridoPage({super.key});
@@ -31,12 +36,17 @@ class _RecorridoPageState extends State<RecorridoPage> {
   final List<DateTime> _momentos = [];
 
   StreamSubscription<Position>? _suscripcion;
+  StreamSubscription<AccelerometerEvent>? _acelerometro;
   Timer? _timer;
+  Timer? _vigiaSensor;
+  final DetectorCaidas _detector = DetectorCaidas();
 
   bool _mapaListo = false;
   bool _enCurso = false;
   bool _ocupado = false;
   bool _puntosEnviados = false;
+  bool _alertaActiva = false;
+  _EstadoSensor _estadoSensor = _EstadoSensor.buscando;
 
   String? _recorridoId;
   DateTime? _inicio;
@@ -54,11 +64,16 @@ class _RecorridoPageState extends State<RecorridoPage> {
   @override
   void dispose() {
     _suscripcion?.cancel();
+    _acelerometro?.cancel();
+    _vigiaSensor?.cancel();
     _timer?.cancel();
     _mapController.dispose();
     super.dispose();
   }
 
+  // --------------------------------------------------------------------------
+  // GPS
+  // --------------------------------------------------------------------------
   Future<void> _verificarPermiso() async {
     final servicioActivo = await Geolocator.isLocationServiceEnabled();
     if (!servicioActivo) {
@@ -74,6 +89,7 @@ class _RecorridoPageState extends State<RecorridoPage> {
     }
   }
 
+  /// Muestra dónde estás apenas se abre la pantalla (si el permiso lo permite).
   Future<void> _ubicarme() async {
     try {
       await _verificarPermiso();
@@ -83,6 +99,7 @@ class _RecorridoPageState extends State<RecorridoPage> {
       setState(() => _actual = p);
       _moverMapa(p);
     } catch (_) {
+      // Si falla, el botón "Comenzar" vuelve a pedir el permiso y muestra el motivo.
     }
   }
 
@@ -151,6 +168,8 @@ class _RecorridoPageState extends State<RecorridoPage> {
         setState(() => _segundos = DateTime.now().difference(inicio).inSeconds);
       });
 
+      _iniciarSensor();
+
       setState(() {
         _enCurso = true;
         _ocupado = false;
@@ -179,6 +198,9 @@ class _RecorridoPageState extends State<RecorridoPage> {
     _suscripcion = null;
     _timer?.cancel();
     _timer = null;
+    _acelerometro?.cancel();
+    _acelerometro = null;
+    _vigiaSensor?.cancel();
 
     final inicio = _inicio;
     if (inicio != null) _segundos = DateTime.now().difference(inicio).inSeconds;
@@ -217,6 +239,135 @@ class _RecorridoPageState extends State<RecorridoPage> {
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Detección de caídas (acelerómetro)
+  // --------------------------------------------------------------------------
+  void _iniciarSensor() {
+    _detector.reiniciar();
+    _acelerometro?.cancel();
+    _vigiaSensor?.cancel();
+    _estadoSensor = _EstadoSensor.buscando;
+
+    try {
+      _acelerometro = accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval).listen(
+        _alLeerAcelerometro,
+        onError: (_) {
+          if (mounted) setState(() => _estadoSensor = _EstadoSensor.sinSensor);
+        },
+      );
+    } catch (_) {
+      _estadoSensor = _EstadoSensor.sinSensor;
+    }
+
+    // Si en 4 segundos no llega ninguna lectura (por ejemplo, una computadora), se avisa.
+    _vigiaSensor = Timer(const Duration(seconds: 4), () {
+      if (mounted && _estadoSensor == _EstadoSensor.buscando) {
+        setState(() => _estadoSensor = _EstadoSensor.sinSensor);
+      }
+    });
+  }
+
+  void _alLeerAcelerometro(AccelerometerEvent evento) {
+    if (_estadoSensor != _EstadoSensor.activo && mounted) {
+      setState(() => _estadoSensor = _EstadoSensor.activo);
+    }
+    if (_alertaActiva) return;
+
+    // Aceleración total en g (1,0 = teléfono quieto, solo la gravedad).
+    final g = math.sqrt(evento.x * evento.x + evento.y * evento.y + evento.z * evento.z) / 9.80665;
+    if (_detector.procesar(g, DateTime.now())) _dispararAlerta();
+  }
+
+  /// Se llama cuando el sensor detecta una posible caída, o con el botón "Simular caída".
+  Future<void> _dispararAlerta() async {
+    if (_alertaActiva || !_enCurso || !mounted) return;
+    _alertaActiva = true;
+    final posicion = _actual;
+
+    // 1) Se guarda ya como "pendiente", por si la persona no puede ni tocar la pantalla.
+    String? alertaId;
+    try {
+      alertaId = await ApiService.instance.registrarAlerta(
+        lat: posicion?.latitude,
+        lng: posicion?.longitude,
+        recorridoId: _recorridoId,
+      );
+    } on SesionExpirada {
+      _alertaActiva = false;
+      _irALogin();
+      return;
+    } catch (_) {
+      // Sin conexión: igual se muestra la alerta y se intenta guardar al resolverla.
+    }
+    if (!mounted) {
+      _alertaActiva = false;
+      return;
+    }
+
+    // 2) Pantalla de confirmación con cuenta regresiva.
+    final resultado = await Navigator.of(context).push<ResultadoAlerta>(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const AlertaCaidaPage()),
+    );
+    final estado = switch (resultado) {
+      ResultadoAlerta.necesitaAyuda || ResultadoAlerta.sinRespuesta => 'confirmada',
+      _ => 'falsa_alarma',
+    };
+    var mensaje = estado == 'confirmada'
+        ? 'Alerta de caída registrada. Si necesitás ayuda, llamá a emergencias.'
+        : 'Marcada como falsa alarma. ¡Qué bueno que estás bien!';
+
+    // 3) Se guarda cómo terminó.
+    try {
+      if (alertaId != null) {
+        await ApiService.instance.actualizarAlerta(alertaId, estado);
+      } else {
+        await ApiService.instance.registrarAlerta(
+          lat: posicion?.latitude,
+          lng: posicion?.longitude,
+          recorridoId: _recorridoId,
+          estado: estado,
+        );
+      }
+    } on SesionExpirada {
+      _alertaActiva = false;
+      _irALogin();
+      return;
+    } catch (_) {
+      mensaje = 'No se pudo guardar la alerta. Revisá tu conexión.';
+    }
+
+    _detector.reiniciar();
+    _alertaActiva = false;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
+    }
+  }
+
+  Widget _indicadorSensor() {
+    final (icono, texto, color) = switch (_estadoSensor) {
+      _EstadoSensor.activo => (Icons.shield_outlined, 'Detección de caídas activa', AppColors.accent),
+      _EstadoSensor.buscando => (Icons.sensors, 'Buscando sensor de movimiento…', AppColors.textOnDark),
+      _EstadoSensor.sinSensor => (
+          Icons.sensors_off,
+          'Sin sensor de movimiento: usá "Simular caída"',
+          AppColors.textOnDark,
+        ),
+    };
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icono, size: 16, color: color),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            texto,
+            style: TextStyle(fontSize: 12, color: AppColors.textOnDark.withOpacity(0.85)),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _mostrarError(String mensaje) {
     if (!mounted) return;
     setState(() {
@@ -243,6 +394,14 @@ class _RecorridoPageState extends State<RecorridoPage> {
         // Mientras graba no se muestra la flecha de volver, para no perder el recorrido sin querer.
         automaticallyImplyLeading: !_enCurso,
         title: const Text('Recorrido', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          if (_enCurso)
+            IconButton(
+              icon: const Icon(Icons.warning_amber_rounded),
+              tooltip: 'Simular caída (demo)',
+              onPressed: _dispararAlerta,
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -324,6 +483,10 @@ class _RecorridoPageState extends State<RecorridoPage> {
                 Expanded(child: _stat('${velocidadMedia.toStringAsFixed(1)} km/h', 'Vel. media')),
               ],
             ),
+            if (_enCurso) ...[
+              const SizedBox(height: 12),
+              _indicadorSensor(),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(
