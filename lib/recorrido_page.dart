@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'alerta_caida_page.dart';
 import 'api_service.dart';
@@ -12,6 +14,7 @@ import 'ciclista_page.dart' show AppColors;
 import 'detector_caidas.dart';
 import 'models.dart';
 
+/// Aviso para el usuario (GPS apagado, permiso denegado...).
 class _Aviso implements Exception {
   final String mensaje;
   const _Aviso(this.mensaje);
@@ -66,6 +69,7 @@ class _RecorridoPageState extends State<RecorridoPage> {
     _suscripcion?.cancel();
     _acelerometro?.cancel();
     _vigiaSensor?.cancel();
+    if (kIsWeb) WakelockPlus.disable().catchError((_) {});
     _timer?.cancel();
     _mapController.dispose();
     super.dispose();
@@ -151,10 +155,7 @@ class _RecorridoPageState extends State<RecorridoPage> {
       _puntosEnviados = false;
 
       _suscripcion = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 3, // solo avisa si se movió al menos 3 metros
-        ),
+        locationSettings: _ajustesUbicacion(), // en Android e iOS sigue en segundo plano
       ).listen(
         _alNuevaPosicion,
         onError: (_) {
@@ -169,6 +170,8 @@ class _RecorridoPageState extends State<RecorridoPage> {
       });
 
       _iniciarSensor();
+      // En el navegador, mantiene la pantalla encendida para que el GPS no se pause.
+      if (kIsWeb) WakelockPlus.enable().catchError((_) {});
 
       setState(() {
         _enCurso = true;
@@ -201,6 +204,7 @@ class _RecorridoPageState extends State<RecorridoPage> {
     _acelerometro?.cancel();
     _acelerometro = null;
     _vigiaSensor?.cancel();
+    if (kIsWeb) WakelockPlus.disable().catchError((_) {});
 
     final inicio = _inicio;
     if (inicio != null) _segundos = DateTime.now().difference(inicio).inSeconds;
@@ -341,6 +345,69 @@ class _RecorridoPageState extends State<RecorridoPage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Segundo plano (RF07)
+  // --------------------------------------------------------------------------
+  /// Configuración del GPS según la plataforma:
+  ///  - Android: servicio en primer plano con una notificación fija. Así el sistema no
+  ///    detiene el registro cuando se minimiza la app o se bloquea la pantalla.
+  ///  - iOS: permite actualizaciones en segundo plano y muestra el indicador azul del sistema.
+  ///  - Navegador: no hay segundo plano posible; se usa la configuración común.
+  LocationSettings _ajustesUbicacion() {
+    if (kIsWeb) {
+      return const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 3);
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 3,
+          intervalDuration: const Duration(seconds: 2),
+          foregroundNotificationConfig: const ForegroundNotificationConfig(
+            notificationTitle: 'Syklist está registrando tu recorrido',
+            notificationText: 'Tocá para volver a la aplicación',
+            enableWakeLock: true,
+            setOngoing: true,
+          ),
+        );
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        return AppleSettings(
+          accuracy: LocationAccuracy.high,
+          activityType: ActivityType.fitness,
+          distanceFilter: 3,
+          pauseLocationUpdatesAutomatically: false,
+          showBackgroundLocationIndicator: true,
+          allowBackgroundLocationUpdates: true,
+        );
+      default:
+        return const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 3);
+    }
+  }
+
+  Widget _avisoSegundoPlano() {
+    final nativo = !kIsWeb;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          nativo ? Icons.lock_clock : Icons.info_outline,
+          size: 16,
+          color: nativo ? AppColors.accent : AppColors.textOnDark,
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            nativo
+                ? 'Sigue registrando con la pantalla bloqueada'
+                : 'En el navegador no se registra con la pantalla bloqueada: usá la app de Android o iOS',
+            style: TextStyle(fontSize: 12, color: AppColors.textOnDark.withOpacity(0.85)),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _indicadorSensor() {
@@ -486,6 +553,8 @@ class _RecorridoPageState extends State<RecorridoPage> {
             if (_enCurso) ...[
               const SizedBox(height: 12),
               _indicadorSensor(),
+              const SizedBox(height: 6),
+              _avisoSegundoPlano(),
             ],
             if (_error != null) ...[
               const SizedBox(height: 12),

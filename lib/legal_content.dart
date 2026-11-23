@@ -3,7 +3,7 @@
 // Cuando cambies cualquiera de los dos textos, subí la versión (versionTerminos):
 // así queda registrado con qué versión se registró cada persona.
 
-const String versionTerminos = '1.0';
+const String versionTerminos = '1.1';
 const String fechaTerminos = 'noviembre de 2026';
 
 // ↓↓↓ COMPLETAR con los datos reales del proyecto antes de entregar ↓↓↓
@@ -104,7 +104,7 @@ const List<SeccionLegal> politicaDePrivacidad = [
     '• Alertas de seguridad: si usás las alertas (por ejemplo, una posible caída), guardamos la fecha, la hora, la ubicación y el estado de la alerta.',
     '• Plan: si tu plan es Gratis o Premium.',
     '• Datos técnicos: un código de sesión que se guarda en tu dispositivo para mantenerte conectado y, si activás las notificaciones, un identificador de tu dispositivo para enviártelas.',
-    'Solo leemos tu ubicación mientras usás las funciones que la necesitan y con la aplicación abierta. En esta versión no se registra tu ubicación en segundo plano.',
+    'Solo leemos tu ubicación mientras grabás un recorrido o usás las funciones que la necesitan. En la aplicación para Android e iOS, mientras grabás un recorrido, la ubicación se sigue registrando aunque minimices la aplicación o bloquees la pantalla, y verás un aviso visible (una notificación en Android o un indicador en iOS). Cuando finalizás el recorrido, se deja de registrar. En el navegador, el registro se pausa si bloqueás la pantalla.',
   ]),
   SeccionLegal('3. Sensores del dispositivo', [
     'Cuando esté disponible la detección de caídas, la aplicación leerá el acelerómetro de tu dispositivo para identificar movimientos bruscos. Esa lectura sirve para decidir si hubo una posible caída y solo se guarda la alerta que resulte de ella.',
